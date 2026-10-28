@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package quantumcalc;
+
+option java_multiple_files = true;
+option java_package = "com.quantumcalc.proto";
+
+// ---------- Ortak mesajlar ----------
+message BinaryRequest {
+  double a = 1;
+  double b = 2;
+  string user_id = 3;
+}
+
+message UnaryRequest {
+  double value = 1;
+  string user_id = 2;
+}
+
+message IntRequest {
+  int32 n = 1;
+  string user_id = 2;
+}
+
+message CombinatoricsRequest {
+  int32 n = 1;
+  int32 r = 2;
+  string user_id = 3;
+}
+
+message DataSetRequest {
+  repeated double values = 1;
+  bool sample = 2;          // true: örneklem sapması (n-1), false: popülasyon sapması (n)
+  string user_id = 3;
+}
+
+message CalcResponse {
+  double result = 1;
+  string operation = 2;
+}
+
+// ---------- Temel İşlem Servisi (PostgreSQL) ----------
+service MathService {
+  rpc Add(BinaryRequest) returns (CalcResponse);
+  rpc Subtract(BinaryRequest) returns (CalcResponse);
+  rpc Multiply(BinaryRequest) returns (CalcResponse);
+  rpc Divide(BinaryRequest) returns (CalcResponse);
+}
+
+// ---------- İleri Matematik Servisi (MongoDB) ----------
+service AdvancedMathService {
+  rpc Sin(UnaryRequest) returns (CalcResponse);
+  rpc Cos(UnaryRequest) returns (CalcResponse);
+  rpc Log(UnaryRequest) returns (CalcResponse);
+  rpc Sqrt(UnaryRequest) returns (CalcResponse);
+  rpc Power(BinaryRequest) returns (CalcResponse);
+}
+
+// ---------- İstatistik Servisi (MongoDB) ----------
+service StatService {
+  rpc Factorial(IntRequest) returns (CalcResponse);
+  rpc Combination(CombinatoricsRequest) returns (CalcResponse);
+  rpc Permutation(CombinatoricsRequest) returns (CalcResponse);
+  rpc StandardDeviation(DataSetRequest) returns (CalcResponse);
+}

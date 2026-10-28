@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: statistics-service
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/statistics}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        max.block.ms: 3000
+    template:
+      observation-enabled: true
+
+server:
+  port: ${SERVER_PORT:8083}
+
+grpc:
+  server:
+    port: ${GRPC_SERVER_PORT:9093}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"

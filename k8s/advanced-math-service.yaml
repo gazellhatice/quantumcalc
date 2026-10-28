@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: advanced-math-service
+  namespace: quantumcalc
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: advanced-math-service }
+  template:
+    metadata:
+      labels: { app: advanced-math-service }
+    spec:
+      containers:
+        - name: advanced-math-service
+          image: quantumcalc/advanced-math-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: grpc, containerPort: 9090 }
+          env:
+            - { name: SERVER_PORT, value: "8080" }
+            - { name: GRPC_SERVER_PORT, value: "9090" }
+            - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
+            - { name: ZIPKIN_ENDPOINT, value: "http://zipkin:9411/api/v2/spans" }
+            - { name: MONGO_URI, value: "mongodb://mongo:27017/advancedmath" }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: advanced-math-service
+  namespace: quantumcalc
+spec:
+  type: ClusterIP
+  selector: { app: advanced-math-service }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+    - { name: grpc, port: 9090, targetPort: 9090 }

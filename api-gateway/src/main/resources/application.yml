@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: api-gateway
+  reactor:
+    context-propagation: auto   # Trace context'i reaktif zincir / thread geçişlerinde taşır
+  cloud:
+    gateway:
+      routes:
+        # Geçmiş servisi saf HTTP olduğu için klasik Gateway route'u ile yönlendirilir
+        - id: history-service
+          uri: ${HISTORY_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/history/**
+          filters:
+            - RewritePath=/api/history/(?<segment>.*), /history/$\{segment}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+quantumcalc:
+  api-key: ${API_KEY:dev-key}
+
+grpc:
+  client:
+    core-math:
+      address: ${CORE_MATH_ADDR:static://localhost:9091}
+      negotiation-type: plaintext
+    advanced-math:
+      address: ${ADVANCED_MATH_ADDR:static://localhost:9092}
+      negotiation-type: plaintext
+    statistics:
+      address: ${STATISTICS_ADDR:static://localhost:9093}
+      negotiation-type: plaintext
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"

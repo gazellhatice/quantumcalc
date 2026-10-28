@@ -1,0 +1,174 @@
+# ---------------- PostgreSQL ----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres, namespace: quantumcalc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_DB, value: coremath }
+            - { name: POSTGRES_USER, value: quantum }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: quantumcalc-secrets, key: postgres-password } }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "quantum", "-d", "coremath"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "quantum", "-d", "coremath"] }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes:
+        - name: data
+          emptyDir: {}   # DEMO: pod silinirse veri gider. Kalıcılık için PVC kullanın.
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: quantumcalc }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+# ---------------- MongoDB ----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mongo, namespace: quantumcalc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mongo } }
+  template:
+    metadata: { labels: { app: mongo } }
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7
+          ports: [{ containerPort: 27017 }]
+          readinessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts: [{ name: data, mountPath: /data/db }]
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mongo, namespace: quantumcalc }
+spec:
+  selector: { app: mongo }
+  ports: [{ port: 27017, targetPort: 27017 }]
+---
+# ---------------- Redis ----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: quantumcalc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: quantumcalc }
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]
+---
+# ---------------- Kafka (KRaft, tek düğüm) ----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: kafka, namespace: quantumcalc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka } }
+  template:
+    metadata: { labels: { app: kafka } }
+    spec:
+      enableServiceLinks: false   # "kafka" servisi KAFKA_PORT env'i enjekte edip imajı bozar; kapatıyoruz
+      containers:
+        - name: kafka
+          image: apache/kafka:3.8.0
+          ports: [{ containerPort: 9092 }]
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka:9092" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: CONTROLLER }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0" }
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 9092 }
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kafka, namespace: quantumcalc }
+spec:
+  selector: { app: kafka }
+  ports: [{ port: 9092, targetPort: 9092 }]
+---
+# ---------------- Zipkin ----------------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: zipkin, namespace: quantumcalc }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: zipkin } }
+  template:
+    metadata: { labels: { app: zipkin } }
+    spec:
+      containers:
+        - name: zipkin
+          image: openzipkin/zipkin
+          ports: [{ containerPort: 9411 }]
+          readinessProbe:
+            httpGet: { path: /health, port: 9411 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata: { name: zipkin, namespace: quantumcalc }
+spec:
+  selector: { app: zipkin }
+  ports: [{ port: 9411, targetPort: 9411 }]
